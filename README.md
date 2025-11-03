@@ -291,13 +291,34 @@ After deployment, the tool generates:
 - Verify workspace name and resource group are correct
 - Ensure your account has read access to the Sentinel workspace
 
+## GitHub Actions Integration
+
+This tool can be automated using GitHub Actions for scheduled audits and controlled deployments.
+
+**Quick Setup**:
+1. Create Azure Service Principal: See **[SETUP_AZURE_SECRETS.md](SETUP_AZURE_SECRETS.md)** for step-by-step instructions
+2. Add 4 secrets to GitHub: `AZURE_CREDENTIALS`, `AZURE_SUBSCRIPTION_ID`, `RESOURCE_GROUP_NAME`, `WORKSPACE_NAME`
+3. Workflows will run automatically!
+
+**Available Workflows**:
+- `sentinel-audit.yml`: Scheduled audits (daily at 9 AM UTC) with optional auto-deployment
+- `sentinel-deploy-updates.yml`: Manual deployment with environment protection
+
+**Key Features**:
+- ✅ Automated daily/weekly audits
+- ✅ CSV reports as workflow artifacts
+- ✅ Azure Service Principal authentication (simple setup)
+- ✅ Environment protection for production deployments
+- ✅ Slack/email notifications (optional)
+
+For advanced OIDC setup, see **[GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)**.
+
 ## Future Enhancements
 
-- Integration with Sentinel Content Hub API for actual update detection
-- Automated deployment workflows
-- Export to CSV/JSON for reporting
-- Comparison against baseline configurations
-- Solution package version tracking
+- Advanced filtering for selective deployments
+- Rollback capabilities for failed deployments
+- Custom update approval workflows
+- Integration with ITSM tools for change management
 
 ## License
 
