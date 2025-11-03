@@ -12,14 +12,13 @@ A Python tool for auditing Microsoft Sentinel data connectors and analytic rules
   - Statistics by severity and enabled/disabled status
 - **Automated Update Detection**: Scan for updates to solutions, rules, and connectors
 - **Change Preview**: View detailed comparisons between current and updated versions
-- **Approval-Based Deployment**: 
+- **Approval-Based Deployment**:
   - Interactive mode to review and approve each update individually
   - Batch mode to deploy all updates at once
   - Auto-approve mode for automated workflows
-- **Deployment Reports**: Generate detailed reports of deployment activities
-- **Detailed Reporting**: Formatted console output and logging for audit trails
-
-## Prerequisites
+- **CSV Export**: Export audit results, detected updates, and deployment reports to CSV format
+- **Deployment Reports**: Generate detailed reports (text and CSV) of deployment activities
+- **Detailed Reporting**: Formatted console output and logging for audit trails## Prerequisites
 
 - Python 3.8 or higher
 - Azure subscription with Microsoft Sentinel workspace
@@ -101,6 +100,31 @@ python main.py --workflow --auto
 ```
 
 **⚠️ Warning**: Use auto-deploy with caution in production environments!
+
+### 4. Export to CSV
+
+Export audit results and updates to CSV files for reporting:
+
+```powershell
+# Audit mode - prompts for CSV export after displaying results
+python main.py
+
+# Workflow mode - prompts for CSV export of detected updates
+python main.py --workflow
+
+# Disable CSV export prompts
+python main.py --no-csv
+python main.py --workflow --no-csv
+```
+
+CSV files include:
+- **Audit Mode**: 
+  - `analytic_rules_YYYYMMDD_HHMMSS.csv` - All installed analytic rules
+  - `data_connectors_YYYYMMDD_HHMMSS.csv` - All data connectors
+- **Workflow Mode**:
+  - `solution_updates_YYYYMMDD_HHMMSS.csv` - Available solution updates
+  - `rule_updates_YYYYMMDD_HHMMSS.csv` - Available rule updates
+  - `deployment_results_YYYYMMDD_HHMMSS.csv` - Deployment outcomes
 
 ### Python Module Usage
 

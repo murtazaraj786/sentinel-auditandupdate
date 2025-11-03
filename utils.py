@@ -2,8 +2,10 @@
 
 import logging
 import json
+import csv
 from typing import Dict, Any, List, Tuple, Optional
 from difflib import unified_diff
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -339,3 +341,264 @@ def export_comparison_report(comparisons: List[Dict[str, Any]], filename: str = 
     except Exception as e:
         logger.error(f"Error exporting comparison report: {str(e)}")
         return False
+
+
+class CSVExporter:
+    """Utility class for exporting data to CSV format."""
+    
+    @staticmethod
+    def export_analytic_rules(rules: List[Dict[str, Any]], filename: str = None) -> str:
+        """Export analytic rules to CSV.
+        
+        Args:
+            rules: List of analytic rule dictionaries.
+            filename: Output filename (auto-generated if not provided).
+            
+        Returns:
+            Filename of the exported CSV.
+        """
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"analytic_rules_{timestamp}.csv"
+        
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                if not rules:
+                    logger.warning("No rules to export")
+                    return filename
+                
+                # Define headers
+                fieldnames = [
+                    'name', 'display_name', 'kind', 'severity', 'enabled', 
+                    'tactics', 'techniques', 'description', 'id'
+                ]
+                
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                for rule in rules:
+                    # Convert lists to comma-separated strings
+                    row = rule.copy()
+                    if 'tactics' in row and isinstance(row['tactics'], list):
+                        row['tactics'] = ', '.join(row['tactics'])
+                    if 'techniques' in row and isinstance(row['techniques'], list):
+                        row['techniques'] = ', '.join(row['techniques'])
+                    
+                    writer.writerow(row)
+            
+            logger.info(f"Exported {len(rules)} rules to {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error exporting rules to CSV: {str(e)}")
+            raise
+    
+    @staticmethod
+    def export_data_connectors(connectors: List[Dict[str, Any]], filename: str = None) -> str:
+        """Export data connectors to CSV.
+        
+        Args:
+            connectors: List of data connector dictionaries.
+            filename: Output filename (auto-generated if not provided).
+            
+        Returns:
+            Filename of the exported CSV.
+        """
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"data_connectors_{timestamp}.csv"
+        
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                if not connectors:
+                    logger.warning("No connectors to export")
+                    return filename
+                
+                fieldnames = ['name', 'kind', 'type', 'id', 'etag']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                for connector in connectors:
+                    writer.writerow(connector)
+            
+            logger.info(f"Exported {len(connectors)} connectors to {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error exporting connectors to CSV: {str(e)}")
+            raise
+    
+    @staticmethod
+    def export_solution_updates(updates: List[Dict[str, Any]], filename: str = None) -> str:
+        """Export solution updates to CSV.
+        
+        Args:
+            updates: List of solution update dictionaries.
+            filename: Output filename (auto-generated if not provided).
+            
+        Returns:
+            Filename of the exported CSV.
+        """
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"solution_updates_{timestamp}.csv"
+        
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                if not updates:
+                    logger.warning("No solution updates to export")
+                    return filename
+                
+                fieldnames = [
+                    'solution_name', 'current_version', 'available_version', 
+                    'publisher', 'package_id', 'installed_id'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                for update in updates:
+                    writer.writerow(update)
+            
+            logger.info(f"Exported {len(updates)} solution updates to {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error exporting solution updates to CSV: {str(e)}")
+            raise
+    
+    @staticmethod
+    def export_rule_updates(updates: List[Dict[str, Any]], filename: str = None) -> str:
+        """Export analytic rule updates to CSV.
+        
+        Args:
+            updates: List of rule update dictionaries.
+            filename: Output filename (auto-generated if not provided).
+            
+        Returns:
+            Filename of the exported CSV.
+        """
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"rule_updates_{timestamp}.csv"
+        
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                if not updates:
+                    logger.warning("No rule updates to export")
+                    return filename
+                
+                fieldnames = [
+                    'rule_name', 'rule_id', 'current_severity', 'template_severity',
+                    'tactics', 'template_id', 'update_type'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                for update in updates:
+                    row = update.copy()
+                    if 'tactics' in row and isinstance(row['tactics'], list):
+                        row['tactics'] = ', '.join(row['tactics'])
+                    writer.writerow(row)
+            
+            logger.info(f"Exported {len(updates)} rule updates to {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error exporting rule updates to CSV: {str(e)}")
+            raise
+    
+    @staticmethod
+    def export_deployment_results(results: List[Dict[str, Any]], filename: str = None) -> str:
+        """Export deployment results to CSV.
+        
+        Args:
+            results: List of deployment result dictionaries.
+            filename: Output filename (auto-generated if not provided).
+            
+        Returns:
+            Filename of the exported CSV.
+        """
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"deployment_results_{timestamp}.csv"
+        
+        try:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                if not results:
+                    logger.warning("No deployment results to export")
+                    return filename
+                
+                fieldnames = [
+                    'type', 'item_name', 'success', 'message', 'note', 'timestamp'
+                ]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for result in results:
+                    row = {
+                        'type': result.get('type', 'unknown'),
+                        'item_name': (
+                            result.get('update', {}).get('solution_name') or
+                            result.get('update', {}).get('rule_name') or
+                            result.get('update', {}).get('connector_name', 'Unknown')
+                        ),
+                        'success': result.get('result', {}).get('success', False),
+                        'message': result.get('result', {}).get('message', ''),
+                        'note': result.get('result', {}).get('note', ''),
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    writer.writerow(row)
+            
+            logger.info(f"Exported {len(results)} deployment results to {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error exporting deployment results to CSV: {str(e)}")
+            raise
+    
+    @staticmethod
+    def export_all_updates(detected_updates: Dict[str, List[Dict[str, Any]]], 
+                          output_dir: str = ".") -> Dict[str, str]:
+        """Export all detected updates to separate CSV files.
+        
+        Args:
+            detected_updates: Dictionary with 'solutions', 'rules', 'connectors' keys.
+            output_dir: Output directory for CSV files.
+            
+        Returns:
+            Dictionary mapping update type to exported filename.
+        """
+        exported_files = {}
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        try:
+            # Export solutions
+            if detected_updates.get('solutions'):
+                filename = f"{output_dir}/solution_updates_{timestamp}.csv"
+                CSVExporter.export_solution_updates(detected_updates['solutions'], filename)
+                exported_files['solutions'] = filename
+            
+            # Export rules
+            if detected_updates.get('rules'):
+                filename = f"{output_dir}/rule_updates_{timestamp}.csv"
+                CSVExporter.export_rule_updates(detected_updates['rules'], filename)
+                exported_files['rules'] = filename
+            
+            # Export connectors (if any)
+            if detected_updates.get('connectors'):
+                filename = f"{output_dir}/connector_updates_{timestamp}.csv"
+                # Create a simple export for connectors
+                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.DictWriter(csvfile, 
+                                          fieldnames=['connector_name', 'update_info'])
+                    writer.writeheader()
+                    for connector in detected_updates['connectors']:
+                        writer.writerow(connector)
+                exported_files['connectors'] = filename
+            
+            logger.info(f"Exported all updates to {len(exported_files)} CSV files")
+            return exported_files
+            
+        except Exception as e:
+            logger.error(f"Error exporting all updates: {str(e)}")
+            raise

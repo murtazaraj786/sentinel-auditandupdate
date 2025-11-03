@@ -12,6 +12,7 @@ from analytic_rules import AnalyticRuleAuditor
 from data_connectors import DataConnectorAuditor
 from content_hub import ContentHubManager
 from deployment import SentinelDeployment
+from utils import CSVExporter
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,33 @@ class UpdateWorkflow:
             print(f"Total connector updates: {len(self.detected_updates['connectors'])}\n")
         else:
             print("🔌 DATA CONNECTORS: No updates available\n")
+    
+    def export_updates_to_csv(self, output_dir: str = ".") -> Dict[str, str]:
+        """Export detected updates to CSV files.
+        
+        Args:
+            output_dir: Directory to save CSV files.
+            
+        Returns:
+            Dictionary mapping update type to filename.
+        """
+        logger.info("Exporting detected updates to CSV...")
+        
+        try:
+            exported_files = CSVExporter.export_all_updates(self.detected_updates, output_dir)
+            
+            print("\n📊 CSV Export Complete:")
+            print("-" * 80)
+            for update_type, filename in exported_files.items():
+                print(f"  {update_type.capitalize()}: {filename}")
+            print()
+            
+            return exported_files
+            
+        except Exception as e:
+            logger.error(f"Error exporting updates to CSV: {str(e)}")
+            print(f"\n⚠️  Error exporting to CSV: {str(e)}\n")
+            return {}
     
     def show_update_details(self, update_type: str, index: int) -> Optional[Dict[str, Any]]:
         """Show detailed information about a specific update.
@@ -370,11 +398,12 @@ class UpdateWorkflow:
         
         return results
     
-    def generate_deployment_report(self, results: List[Dict[str, Any]]) -> str:
+    def generate_deployment_report(self, results: List[Dict[str, Any]], export_csv: bool = True) -> str:
         """Generate a deployment report.
         
         Args:
             results: List of deployment results.
+            export_csv: Whether to also export results to CSV.
             
         Returns:
             Report as string.
@@ -416,15 +445,20 @@ class UpdateWorkflow:
         
         report = "\n".join(report_lines)
         
-        # Save to file
+        # Save to text file
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"deployment_report_{timestamp}.txt"
+            txt_filename = f"deployment_report_{timestamp}.txt"
             
-            with open(filename, 'w') as f:
+            with open(txt_filename, 'w') as f:
                 f.write(report)
             
-            report_lines.append(f"\nReport saved to: {filename}")
+            report_lines.append(f"\nText report saved to: {txt_filename}")
+            
+            # Export to CSV if requested
+            if export_csv and results:
+                csv_filename = CSVExporter.export_deployment_results(results)
+                report_lines.append(f"CSV report saved to: {csv_filename}")
             
         except Exception as e:
             logger.error(f"Error saving report: {str(e)}")
