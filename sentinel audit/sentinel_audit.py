@@ -48,9 +48,10 @@ def get_azure_credential():
         return DefaultAzureCredential()
 
 def audit_data_connectors(client):
-    """Audit data connectors and return all of them."""
+    """Audit data connectors and return a clean summary."""
     print("Auditing data connectors...")
     connectors = []
+    connector_counts = {}
     
     try:
         # List all data connectors
@@ -59,43 +60,40 @@ def audit_data_connectors(client):
             workspace_name=WORKSPACE_NAME
         )
         
+        # Count connectors by type
         for connector in data_connectors:
-            # Get friendly name or fall back to type
-            friendly_name = getattr(connector, 'friendly_name', None) or getattr(connector, 'data_type_friendly_name', None) or connector.kind
+            connector_type = connector.kind
+            if connector_type not in connector_counts:
+                connector_counts[connector_type] = 0
+            connector_counts[connector_type] += 1
+        
+        # Create clean summary
+        for connector_type, count in connector_counts.items():
+            # Create friendly names
+            friendly_names = {
+                'AzureSecurityCenter': 'Microsoft Defender for Cloud',
+                'AzureActiveDirectory': 'Azure Active Directory',
+                'AzureAdvancedThreatProtection': 'Microsoft Defender for Identity',
+                'MicrosoftDefenderAdvancedThreatProtection': 'Microsoft Defender for Endpoint',
+                'MicrosoftCloudAppSecurity': 'Microsoft Defender for Cloud Apps',
+                'Office365': 'Microsoft 365',
+                'MicrosoftThreatIntelligence': 'Microsoft Threat Intelligence',
+                'SecurityEvents': 'Security Events via AMA',
+                'WindowsFirewall': 'Windows Defender Firewall'
+            }
             
-            # Get tenant ID for some connector types that show it
-            tenant_info = ""
-            if hasattr(connector, 'tenant_id') and connector.tenant_id:
-                tenant_info = f" (Tenant: {connector.tenant_id[:8]}...)"
+            display_name = friendly_names.get(connector_type, connector_type)
             
-            # Get subscription ID for some connector types
-            sub_info = ""
-            if hasattr(connector, 'subscription_id') and connector.subscription_id:
-                sub_info = f" (Sub: {connector.subscription_id[:8]}...)"
-            
-            display_name = f"{friendly_name}{tenant_info}{sub_info}"
-            
-            print(f"  Found connector: {display_name}")
-            
-            # Try to get better date info
-            created_date = 'Unknown'
-            modified_date = 'Unknown'
-            
-            if hasattr(connector, 'system_data') and connector.system_data:
-                if hasattr(connector.system_data, 'created_at') and connector.system_data.created_at:
-                    created_date = str(connector.system_data.created_at)[:10]  # Just the date part
-                if hasattr(connector.system_data, 'last_modified_at') and connector.system_data.last_modified_at:
-                    modified_date = str(connector.system_data.last_modified_at)[:10]  # Just the date part
+            print(f"  Found: {display_name} ({count} instances)")
             
             connectors.append({
-                'Name': display_name,
-                'Type': connector.kind,
-                'State': getattr(connector, 'state', 'Active'),
-                'Created': created_date,
-                'Modified': modified_date
+                'Connector': display_name,
+                'Type': connector_type,
+                'Count': count,
+                'Status': 'Active'
             })
         
-        print(f"Found {len(connectors)} total data connectors")
+        print(f"Found {len(connectors)} connector types ({sum(connector_counts.values())} total instances)")
         return connectors
         
     except AzureError as e:
@@ -192,7 +190,7 @@ def main():
         
         # Export to CSV files
         if connectors:
-            connector_fields = ['Name', 'Type', 'State', 'Created', 'Modified']
+            connector_fields = ['Connector', 'Type', 'Count', 'Status']
             export_to_csv(connectors, f'sentinel_data_connectors_{timestamp}.csv', connector_fields)
         else:
             print("⚠️  No data connectors found")

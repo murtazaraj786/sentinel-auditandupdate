@@ -1,0 +1,78 @@
+name: Sentinel Audit
+
+on:
+  # Schedule to run daily at 9 AM UTC
+  schedule:
+    - cron: '0 9 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      export_csv:
+        description: 'Export results to CSV'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  audit-sentinel:
+    name: Audit Sentinel Workspace
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: './Sentinel Audit'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r simple_requirements.txt
+      
+      - name: Azure Login (Service Principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Run Sentinel Audit
+        working-directory: './Sentinel Audit'
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          RESOURCE_GROUP_NAME: ${{ secrets.RESOURCE_GROUP_NAME }}
+          WORKSPACE_NAME: ${{ secrets.WORKSPACE_NAME }}
+          AUTH_MODE: 'default'  # Use Azure CLI credentials from login step
+        run: |
+          echo "Running Sentinel audit..."
+          python sentinel_audit.py
+      
+      - name: Upload CSV Reports
+        if: ${{ github.event.inputs.export_csv != 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-audit-reports-${{ github.run_number }}
+          path: |
+            Sentinel Audit/*.csv
+          retention-days: 30
+          if-no-files-found: warn
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Sentinel Audit Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow Run**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check artifacts for CSV reports." >> $GITHUB_STEP_SUMMARY
