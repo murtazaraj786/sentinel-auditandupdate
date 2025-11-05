@@ -1,7 +1,0 @@
-Connector,Type,Count,Status
-Microsoft Defender for Cloud,AzureSecurityCenter,39,Active
-Azure Active Directory,AzureActiveDirectory,1,Active
-Microsoft Defender for Identity,AzureAdvancedThreatProtection,1,Active
-Microsoft Defender for Endpoint,MicrosoftDefenderAdvancedThreatProtection,1,Active
-Microsoft Defender for Cloud Apps,MicrosoftCloudAppSecurity,1,Active
-Microsoft 365,Office365,1,Active

@@ -1,4 +1,4 @@
-name: Sentinel Audit
+name: Security Audit Suite (Sentinel & Defender XDR)
 
 on:
   # Schedule to run daily at 9 AM UTC
@@ -8,6 +8,21 @@ on:
   # Allow manual trigger
   workflow_dispatch:
     inputs:
+      run_basic_audit:
+        description: 'Run basic Sentinel audit (connectors & rules)'
+        required: false
+        type: boolean
+        default: true
+      run_soc_optimization:
+        description: 'Run SOC optimization analysis'
+        required: false
+        type: boolean
+        default: true
+      run_defender_xdr_audit:
+        description: 'Run Defender XDR security audit'
+        required: false
+        type: boolean
+        default: true
       export_csv:
         description: 'Export results to CSV'
         required: false
@@ -18,9 +33,10 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  audit-sentinel:
-    name: Audit Sentinel Workspace
+  basic-audit:
+    name: Basic Sentinel Audit
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.run_basic_audit != 'false' }}
     
     permissions:
       contents: read
@@ -35,7 +51,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
       
-      - name: Install dependencies
+      - name: Install basic audit dependencies
         working-directory: './Sentinel Audit'
         run: |
           python -m pip install --upgrade pip
@@ -46,7 +62,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       
-      - name: Run Sentinel Audit
+      - name: Run Basic Sentinel Audit
         working-directory: './Sentinel Audit'
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -54,25 +70,138 @@ jobs:
           WORKSPACE_NAME: ${{ secrets.WORKSPACE_NAME }}
           AUTH_MODE: 'default'  # Use Azure CLI credentials from login step
         run: |
-          echo "Running Sentinel audit..."
+          echo "Running basic Sentinel audit..."
           python sentinel_audit.py
       
-      - name: Upload CSV Reports
+      - name: Upload Basic Audit CSV Reports
         if: ${{ github.event.inputs.export_csv != 'false' }}
         uses: actions/upload-artifact@v4
         with:
-          name: sentinel-audit-reports-${{ github.run_number }}
+          name: sentinel-basic-audit-${{ github.run_number }}
           path: |
             Sentinel Audit/*.csv
           retention-days: 30
           if-no-files-found: warn
+
+  soc-optimization:
+    name: SOC Optimization Analysis
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.run_soc_optimization != 'false' }}
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       
-      - name: Summary
-        if: always()
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install SOC optimization dependencies
+        working-directory: './Sentinel SOC Optimisation Audit'
         run: |
-          echo "## Sentinel Audit Complete ✅" >> $GITHUB_STEP_SUMMARY
+          python -m pip install --upgrade pip
+          pip install -r soc_requirements.txt
+      
+      - name: Azure Login (Service Principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Run SOC Optimization Analysis
+        working-directory: './Sentinel SOC Optimisation Audit'
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          RESOURCE_GROUP_NAME: ${{ secrets.RESOURCE_GROUP_NAME }}
+          WORKSPACE_NAME: ${{ secrets.WORKSPACE_NAME }}
+          AUTH_MODE: 'default'  # Use Azure CLI credentials from login step
+        run: |
+          echo "Running SOC optimization analysis..."
+          python soc_optimization_audit.py
+      
+      - name: Upload SOC Optimization CSV Reports
+        if: ${{ github.event.inputs.export_csv != 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-soc-optimization-${{ github.run_number }}
+          path: |
+            Sentinel SOC Optimisation Audit/*.csv
+          retention-days: 30
+          if-no-files-found: warn
+
+  defender-xdr-audit:
+    name: Defender XDR Security Audit
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.run_defender_xdr_audit != 'false' }}
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install Defender XDR audit dependencies
+        working-directory: './Defender XDR Audit'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r xdr_requirements.txt
+      
+      - name: Azure Login (Service Principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Run Defender XDR Audit
+        working-directory: './Defender XDR Audit'
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AUTH_MODE: 'default'  # Use Azure CLI credentials from login step
+        run: |
+          echo "Running Defender XDR security audit..."
+          python defender_xdr_audit.py
+      
+      - name: Upload Defender XDR CSV Reports
+        if: ${{ github.event.inputs.export_csv != 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: defender-xdr-audit-${{ github.run_number }}
+          path: |
+            Defender XDR Audit/*.csv
+          retention-days: 30
+          if-no-files-found: warn
+      
+  summary:
+    name: Generate Summary
+    runs-on: ubuntu-latest
+    needs: [basic-audit, soc-optimization, defender-xdr-audit]
+    if: always()
+    
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🛡️ Security Analysis Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Workflow Run**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered By**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Sentinel Basic Audit**: ${{ github.event.inputs.run_basic_audit != 'false' && '✅ Completed' || '⏭️ Skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **SOC Optimization**: ${{ github.event.inputs.run_soc_optimization != 'false' && '✅ Completed' || '⏭️ Skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Defender XDR Audit**: ${{ github.event.inputs.run_defender_xdr_audit != 'false' && '✅ Completed' || '⏭️ Skipped' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Check artifacts for CSV reports." >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Available Reports" >> $GITHUB_STEP_SUMMARY
+          echo "- **Sentinel Basic**: Data connectors and analytic rules" >> $GITHUB_STEP_SUMMARY
+          echo "- **SOC Optimization**: Rule efficiency, data ingestion, recommendations" >> $GITHUB_STEP_SUMMARY
+          echo "- **Defender XDR**: Security alerts, incidents, simulations, secure score" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📁 Check **Artifacts** section below for CSV downloads" >> $GITHUB_STEP_SUMMARY

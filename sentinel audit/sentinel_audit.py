@@ -10,6 +10,8 @@ import sys
 from datetime import datetime
 from azure.identity import DefaultAzureCredential, ClientSecretCredential, InteractiveBrowserCredential, DeviceCodeCredential
 from azure.mgmt.securityinsight import SecurityInsights
+from azure.mgmt.subscription import SubscriptionClient
+from azure.mgmt.resource import ResourceManagementClient
 from azure.core.exceptions import AzureError
 
 # Configuration
@@ -40,12 +42,66 @@ def get_azure_credential():
     
     elif all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
         print("🔑 Using Service Principal authentication")
-        return ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
+        return ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET) # type: ignore
     
     else:
         print("🔄 Using Default Azure Credential (trying Azure CLI first)")
         print("💡 If this fails, set AUTH_MODE=device or AUTH_MODE=browser")
         return DefaultAzureCredential()
+
+def get_customer_info(credential):
+    """Get customer information from Azure subscription and tenant details."""
+    try:
+        # Get subscription info
+        subscription_client = SubscriptionClient(credential)
+        subscription = subscription_client.subscriptions.get(SUBSCRIPTION_ID) # type: ignore
+        
+        # Get tenant info from resource management
+        resource_client = ResourceManagementClient(credential, SUBSCRIPTION_ID) # type: ignore
+        tenant_id = subscription.tenant_id # type: ignore
+        
+        # Extract meaningful customer name
+        subscription_name = subscription.display_name or "Unknown Subscription"
+        
+        # Common patterns to clean up subscription names
+        customer_name = subscription_name.replace("Microsoft Azure Sponsorship", "").strip()
+        customer_name = customer_name.replace("Pay-As-You-Go", "").strip()
+        customer_name = customer_name.replace("Free Trial", "").strip()
+        customer_name = customer_name.split("-")[0].strip() if "-" in customer_name else customer_name
+        
+        # If still generic, try to extract from resource group pattern
+        if customer_name.lower() in ["", "microsoft", "azure", "subscription"]:
+            if RESOURCE_GROUP:
+                # Extract customer name from resource group (common pattern: customer-rg-region)
+                rg_parts = RESOURCE_GROUP.split("-")
+                if len(rg_parts) > 0:
+                    customer_name = rg_parts[0].title()
+        
+        # Fallback to a cleaned subscription name
+        if not customer_name or customer_name.lower() in ["", "microsoft", "azure"]:
+            customer_name = "Azure Customer"
+            
+        return {
+            "customer_name": customer_name,
+            "subscription_name": subscription_name,
+            "subscription_id": SUBSCRIPTION_ID,
+            "tenant_id": str(tenant_id) if tenant_id else "Unknown"
+        }
+        
+    except Exception as e:
+        print(f"⚠️  Could not retrieve customer info: {e}")
+        # Fallback to resource group-based naming
+        if RESOURCE_GROUP:
+            customer_name = RESOURCE_GROUP.split("-")[0].title()
+        else:
+            customer_name = "Azure Customer"
+            
+        return {
+            "customer_name": customer_name,
+            "subscription_name": "Unknown Subscription",
+            "subscription_id": SUBSCRIPTION_ID or "Unknown",
+            "tenant_id": "Unknown"
+        }
 
 def audit_data_connectors(client):
     """Audit data connectors and return a clean summary."""
@@ -177,7 +233,16 @@ def main():
     try:
         # Get credentials and create client
         credential = get_azure_credential()
-        client = SecurityInsights(credential, SUBSCRIPTION_ID)
+        
+        # Get customer information first
+        print("🏢 Retrieving customer information...")
+        customer_info = get_customer_info(credential)
+        print(f"📊 Auditing: {customer_info['customer_name']}")
+        print(f"📋 Subscription: {customer_info['subscription_name']}")
+        print(f"🆔 Tenant ID: {customer_info['tenant_id']}")
+        print()
+        
+        client = SecurityInsights(credential, SUBSCRIPTION_ID) # type: ignore
         
         # Audit data connectors
         connectors = audit_data_connectors(client)
@@ -187,6 +252,15 @@ def main():
         
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save customer information to metadata file
+        metadata_file = f'sentinel_customer_info_{timestamp}.csv'
+        with open(metadata_file, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=['customer_name', 'subscription_name', 'subscription_id', 'tenant_id', 'audit_timestamp'])
+            writer.writeheader()
+            customer_info['audit_timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+            writer.writerow(customer_info)
+        print(f"💾 Customer metadata saved to: {metadata_file}")
         
         # Export to CSV files
         if connectors:
