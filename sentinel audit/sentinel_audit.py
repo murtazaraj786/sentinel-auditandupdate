@@ -8,6 +8,7 @@ import os
 import csv
 import sys
 from datetime import datetime
+from pathlib import Path
 from azure.identity import DefaultAzureCredential, ClientSecretCredential, InteractiveBrowserCredential, DeviceCodeCredential
 from azure.mgmt.securityinsight import SecurityInsights
 from azure.mgmt.subscription import SubscriptionClient
@@ -23,6 +24,22 @@ WORKSPACE_NAME = os.getenv('WORKSPACE_NAME')
 TENANT_ID = os.getenv('AZURE_TENANT_ID')
 CLIENT_ID = os.getenv('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.getenv('AZURE_CLIENT_SECRET')
+
+
+def resolve_output_dir() -> Path:
+    """Resolve and create the output directory for generated reports."""
+    base_dir = Path(__file__).resolve().parent.parent
+    env_value = os.getenv('OUTPUT_DIR')
+
+    if env_value:
+        candidate = Path(env_value)
+        if not candidate.is_absolute():
+            candidate = (base_dir / candidate).resolve()
+    else:
+        candidate = base_dir / "output"
+
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
 
 def get_azure_credential():
     """Get Azure credentials with interactive options."""
@@ -224,16 +241,16 @@ def audit_analytic_rules(client):
         print(f"Error fetching analytic rules: {e}")
         return []
 
-def export_to_csv(data, filename, fieldnames):
+def export_to_csv(data, file_path: Path, fieldnames):
     """Export data to CSV file."""
     try:
-        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+        with file_path.open('w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(data)
-        print(f"✅ Exported {len(data)} records to {filename}")
+        print(f"✅ Exported {len(data)} records to {file_path}")
     except Exception as e:
-        print(f"❌ Error writing to {filename}: {e}")
+        print(f"❌ Error writing to {file_path}: {e}")
 
 def main():
     """Main function."""
@@ -291,30 +308,34 @@ def main():
         # Audit analytic rules  
         rules = audit_analytic_rules(client)
         
+        # Resolve output directory
+        output_dir = resolve_output_dir()
+        print(f"📁 Output directory: {output_dir}")
+
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Save customer information to metadata file
-        metadata_file = f'sentinel_customer_info_{timestamp}.csv'
-        with open(metadata_file, 'w', newline='', encoding='utf-8') as csvfile:
+        metadata_file = output_dir / f'sentinel_customer_info_{timestamp}.csv'
+        with metadata_file.open('w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=['customer_name', 'subscription_name', 'subscription_id', 'tenant_id', 'audit_timestamp'])
             writer.writeheader()
             customer_info['audit_timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
             writer.writerow(customer_info)
         print(f"💾 Customer metadata saved to: {metadata_file}")
         
-        # Export to CSV files
-        if connectors:
-            connector_fields = ['Connector', 'Type', 'Count', 'Status']
-            export_to_csv(connectors, f'sentinel_data_connectors_{timestamp}.csv', connector_fields)
-        else:
-            print("⚠️  No data connectors found")
-        
-        if rules:
-            rule_fields = ['Name', 'Enabled']
-            export_to_csv(rules, f'sentinel_analytic_rules_{timestamp}.csv', rule_fields)
-        else:
-            print("⚠️  No enabled analytic rules found")
+        # Export to CSV files (always emit files for downstream tooling)
+        connector_fields = ['Connector', 'Type', 'Count', 'Status']
+        connector_file = output_dir / f'sentinel_data_connectors_{timestamp}.csv'
+        export_to_csv(connectors, connector_file, connector_fields)
+        if not connectors:
+            print("⚠️  No data connectors found — exported empty report")
+
+        rule_fields = ['Name', 'Enabled']
+        rule_file = output_dir / f'sentinel_analytic_rules_{timestamp}.csv'
+        export_to_csv(rules, rule_file, rule_fields)
+        if not rules:
+            print("⚠️  No enabled analytic rules found — exported empty report")
         
         print()
         print("✅ Audit completed successfully!")

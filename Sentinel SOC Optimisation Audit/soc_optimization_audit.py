@@ -8,6 +8,7 @@ import os
 import csv
 import sys
 from datetime import datetime
+from pathlib import Path
 from azure.identity import DefaultAzureCredential, ClientSecretCredential, InteractiveBrowserCredential, DeviceCodeCredential
 from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resource import ResourceManagementClient
@@ -27,6 +28,22 @@ WORKSPACE_NAME = os.getenv('WORKSPACE_NAME')
 TENANT_ID = os.getenv('AZURE_TENANT_ID')
 CLIENT_ID = os.getenv('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.getenv('AZURE_CLIENT_SECRET')
+
+
+def resolve_output_dir() -> Path:
+    """Resolve and create the output directory for generated reports."""
+    base_dir = Path(__file__).resolve().parent.parent
+    env_value = os.getenv('OUTPUT_DIR')
+
+    if env_value:
+        candidate = Path(env_value)
+        if not candidate.is_absolute():
+            candidate = (base_dir / candidate).resolve()
+    else:
+        candidate = base_dir / "output"
+
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
 
 def get_azure_credential():
     """Get Azure credentials with interactive options."""
@@ -103,11 +120,11 @@ def get_customer_info(credential):
     try:
         # Get subscription info
         subscription_client = SubscriptionClient(credential)
-        subscription = subscription_client.subscriptions.get(SUBSCRIPTION_ID)
+        subscription = subscription_client.subscriptions.get(SUBSCRIPTION_ID)  # type: ignore[arg-type]
         
         # Get tenant info from resource management
-        resource_client = ResourceManagementClient(credential, SUBSCRIPTION_ID)
-        tenant_id = subscription.tenant_id
+        resource_client = ResourceManagementClient(credential, SUBSCRIPTION_ID)  # type: ignore[arg-type]
+        tenant_id = subscription.tenant_id  # type: ignore[attr-defined]
         
         # Extract meaningful customer name
         subscription_name = subscription.display_name or "Unknown Subscription"
@@ -399,16 +416,16 @@ def get_optimization_recommendations(rules, ingestion):
     print(f"Generated {len(recommendations)} recommendations")
     return recommendations
 
-def export_to_csv(data, filename, fieldnames):
+def export_to_csv(data, file_path: Path, fieldnames):
     """Export data to CSV file."""
     try:
-        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+        with file_path.open('w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(data)
-        print(f"✅ Exported {len(data)} records to {filename}")
+        print(f"✅ Exported {len(data)} records to {file_path}")
     except Exception as e:
-        print(f"❌ Error writing to {filename}: {e}")
+        print(f"❌ Error writing to {file_path}: {e}")
 
 def main():
     """Main function."""
@@ -466,12 +483,16 @@ def main():
         ingestion = audit_data_ingestion(credential, workspace_id)
         recommendations = get_optimization_recommendations(rules, ingestion)
         
+        # Resolve output directory
+        output_dir = resolve_output_dir()
+        print(f"📁 Output directory: {output_dir}")
+
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Save customer information to metadata file
-        metadata_file = f'soc_customer_info_{timestamp}.csv'
-        with open(metadata_file, 'w', newline='', encoding='utf-8') as csvfile:
+        metadata_file = output_dir / f'soc_customer_info_{timestamp}.csv'
+        with metadata_file.open('w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=['customer_name', 'subscription_name', 'subscription_id', 'tenant_id', 'audit_timestamp'])
             writer.writeheader()
             customer_info['audit_timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -482,15 +503,15 @@ def main():
         if rules:
             rule_fields = ['RuleName', 'Product', 'Severity', 'TotalAlerts', 'TruePositives', 
                           'FalsePositives', 'TruePositiveRate', 'FalsePositiveRate', 'Efficiency']
-            export_to_csv(rules, f'soc_rule_efficiency_{timestamp}.csv', rule_fields)
+            export_to_csv(rules, output_dir / f'soc_rule_efficiency_{timestamp}.csv', rule_fields)
         
         if ingestion:
             ingestion_fields = ['DataType', 'Solution', 'TotalGB_30Days', 'DailyAverageGB', 'VolumeCategory']
-            export_to_csv(ingestion, f'soc_data_ingestion_{timestamp}.csv', ingestion_fields)
+            export_to_csv(ingestion, output_dir / f'soc_data_ingestion_{timestamp}.csv', ingestion_fields)
         
         if recommendations:
             rec_fields = ['Category', 'Type', 'Description', 'Impact', 'Action']
-            export_to_csv(recommendations, f'soc_recommendations_{timestamp}.csv', rec_fields)
+            export_to_csv(recommendations, output_dir / f'soc_recommendations_{timestamp}.csv', rec_fields)
         
         print()
         print("✅ SOC Optimization audit completed successfully!")

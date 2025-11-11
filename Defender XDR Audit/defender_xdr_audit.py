@@ -10,6 +10,7 @@ import sys
 import json
 import requests
 from datetime import datetime
+from pathlib import Path
 from azure.identity import DefaultAzureCredential, ClientSecretCredential, InteractiveBrowserCredential, DeviceCodeCredential
 from azure.mgmt.subscription import SubscriptionClient
 from azure.core.exceptions import AzureError
@@ -19,10 +20,51 @@ SUBSCRIPTION_ID = os.getenv('AZURE_SUBSCRIPTION_ID')
 TENANT_ID = os.getenv('AZURE_TENANT_ID')
 CLIENT_ID = os.getenv('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.getenv('AZURE_CLIENT_SECRET')
+PUBLIC_CLIENT_ID = os.getenv('AZURE_PUBLIC_CLIENT_ID', '04b07795-8ddb-461a-bbee-02f9e1bf7b46')
+
+DEVICE_CODE_SCOPES = [
+    "https://graph.microsoft.com/.default",
+    "https://management.azure.com/.default"
+]
 
 # Microsoft Graph API endpoints
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 SECURITY_BASE_URL = "https://graph.microsoft.com/beta/security"
+
+
+def resolve_output_dir() -> Path:
+    """Resolve and create the output directory for Defender reports."""
+    base_dir = Path(__file__).resolve().parent.parent
+    env_value = os.getenv('OUTPUT_DIR')
+
+    if env_value:
+        candidate = Path(env_value)
+        if not candidate.is_absolute():
+            candidate = (base_dir / candidate).resolve()
+    else:
+        candidate = base_dir / "output"
+
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
+
+
+def _create_device_code_credential():
+    """Build a device code credential that signs in once for ARM + Graph."""
+    kwargs = {
+        'client_id': CLIENT_ID or PUBLIC_CLIENT_ID,
+        'disable_automatic_authentication': True
+    }
+    if TENANT_ID:
+        kwargs['tenant_id'] = TENANT_ID
+
+    credential = DeviceCodeCredential(**kwargs)
+    try:
+        for scope in DEVICE_CODE_SCOPES:
+            credential.authenticate(scopes=[scope])
+    except Exception as exc:
+        print(f"❌ Device authentication failed: {exc}")
+        sys.exit(1)
+    return credential
 
 def get_azure_credential():
     """Get Azure credentials with interactive options."""
@@ -34,7 +76,7 @@ def get_azure_credential():
     if auth_mode == 'device':
         print("🔐 Using Device Code authentication")
         print("📱 You'll be prompted to visit a URL and enter a code")
-        return DeviceCodeCredential()
+        return _create_device_code_credential()
     
     elif auth_mode == 'browser':
         print("🌐 Using Interactive Browser authentication")
@@ -74,7 +116,7 @@ def get_azure_credential():
                 elif choice == '2':
                     print("🔐 Using Device Code authentication")
                     print("📱 You'll be prompted to visit a URL and enter a code")
-                    return DeviceCodeCredential()
+                    return _create_device_code_credential()
                 
                 elif choice == '3':
                     print("🔄 Using Azure CLI authentication")
@@ -160,7 +202,7 @@ def get_customer_info(credential):
             "tenant_id": TENANT_ID or "Unknown"
         }
 
-def export_security_alerts(access_token, customer_info):
+def export_security_alerts(access_token, customer_info, output_dir: Path):
     """Export security alerts from Microsoft 365 Defender."""
     print("📊 Exporting Security Alerts...")
     
@@ -176,9 +218,9 @@ def export_security_alerts(access_token, customer_info):
         print("⚠️  No security alerts data found")
         return
     
-    filename = f"defender_xdr_security_alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
-    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+    file_path = output_dir / f"defender_xdr_security_alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    with file_path.open('w', newline='', encoding='utf-8') as csvfile:
         fieldnames = [
             'Customer', 'Tenant ID', 'Alert ID', 'Title', 'Category', 'Severity', 
             'Status', 'Created Date', 'Modified Date', 'Classification', 
@@ -204,10 +246,10 @@ def export_security_alerts(access_token, customer_info):
                 'Export Date': datetime.now().isoformat()
             })
     
-    print(f"✅ Security alerts exported to: {filename}")
+    print(f"✅ Security alerts exported to: {file_path}")
     return len(data['value'])
 
-def export_security_incidents(access_token, customer_info):
+def export_security_incidents(access_token, customer_info, output_dir: Path):
     """Export security incidents from Microsoft 365 Defender."""
     print("🔍 Exporting Security Incidents...")
     
@@ -223,9 +265,9 @@ def export_security_incidents(access_token, customer_info):
         print("⚠️  No security incidents data found")
         return
     
-    filename = f"defender_xdr_security_incidents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
-    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+    file_path = output_dir / f"defender_xdr_security_incidents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    with file_path.open('w', newline='', encoding='utf-8') as csvfile:
         fieldnames = [
             'Customer', 'Tenant ID', 'Incident ID', 'Display Name', 'Status', 
             'Severity', 'Classification', 'Determination', 'Created Date', 
@@ -253,10 +295,10 @@ def export_security_incidents(access_token, customer_info):
                 'Export Date': datetime.now().isoformat()
             })
     
-    print(f"✅ Security incidents exported to: {filename}")
+    print(f"✅ Security incidents exported to: {file_path}")
     return len(data['value'])
 
-def export_attack_simulation_trainings(access_token, customer_info):
+def export_attack_simulation_trainings(access_token, customer_info, output_dir: Path):
     """Export attack simulation training campaigns."""
     print("🎯 Exporting Attack Simulation Trainings...")
     
@@ -267,9 +309,9 @@ def export_attack_simulation_trainings(access_token, customer_info):
         print("⚠️  No attack simulation data found")
         return
     
-    filename = f"defender_xdr_attack_simulations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
-    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+    file_path = output_dir / f"defender_xdr_attack_simulations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    with file_path.open('w', newline='', encoding='utf-8') as csvfile:
         fieldnames = [
             'Customer', 'Tenant ID', 'Simulation ID', 'Display Name', 'Status', 
             'Attack Type', 'Created Date', 'Launch Date', 'End Date', 
@@ -293,10 +335,10 @@ def export_attack_simulation_trainings(access_token, customer_info):
                 'Export Date': datetime.now().isoformat()
             })
     
-    print(f"✅ Attack simulations exported to: {filename}")
+    print(f"✅ Attack simulations exported to: {file_path}")
     return len(data['value'])
 
-def export_secure_score(access_token, customer_info):
+def export_secure_score(access_token, customer_info, output_dir: Path):
     """Export Microsoft Secure Score data."""
     print("📈 Exporting Secure Score Data...")
     
@@ -308,9 +350,9 @@ def export_secure_score(access_token, customer_info):
         print("⚠️  No secure score data found")
         return
     
-    filename = f"defender_xdr_secure_score_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
-    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+    file_path = output_dir / f"defender_xdr_secure_score_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    with file_path.open('w', newline='', encoding='utf-8') as csvfile:
         fieldnames = [
             'Customer', 'Tenant ID', 'Current Score', 'Max Score', 'Percentage', 
             'Created Date', 'Enabled Services', 'Licensed Users', 'Export Date'
@@ -333,7 +375,7 @@ def export_secure_score(access_token, customer_info):
             'Export Date': datetime.now().isoformat()
         })
     
-    print(f"✅ Secure score exported to: {filename}")
+    print(f"✅ Secure score exported to: {file_path}")
     return 1
 
 def main():
@@ -356,25 +398,29 @@ def main():
         print(f"🆔 Tenant ID: {customer_info['tenant_id']}")
         print("")
         
+        # Resolve output directory
+        output_dir = resolve_output_dir()
+        print(f"📁 Output directory: {output_dir}")
+
         # Get access token for Microsoft Graph
         access_token = get_access_token(credential)
         
         # Export data
         total_items = 0
         
-        alerts_count = export_security_alerts(access_token, customer_info)
+        alerts_count = export_security_alerts(access_token, customer_info, output_dir)
         if alerts_count:
             total_items += alerts_count
         
-        incidents_count = export_security_incidents(access_token, customer_info)
+        incidents_count = export_security_incidents(access_token, customer_info, output_dir)
         if incidents_count:
             total_items += incidents_count
         
-        simulations_count = export_attack_simulation_trainings(access_token, customer_info)
+        simulations_count = export_attack_simulation_trainings(access_token, customer_info, output_dir)
         if simulations_count:
             total_items += simulations_count
         
-        score_count = export_secure_score(access_token, customer_info)
+        score_count = export_secure_score(access_token, customer_info, output_dir)
         if score_count:
             total_items += score_count
         
@@ -382,7 +428,7 @@ def main():
         print("=" * 50)
         print(f"✅ Defender XDR audit completed successfully!")
         print(f"📊 Total items exported: {total_items}")
-        print(f"📁 Files created in current directory")
+        print(f"📁 Files created in {output_dir}")
         print("=" * 50)
         
     except AzureError as e:

@@ -1,3 +1,10 @@
-
 # Ignore Python cache
-__pycache__/\n*.pyc
+__pycache__/
+*.pyc
+
+# Ignore generated reports and documents
+*.csv
+*.docx
+old output/
+**/output/
+.env

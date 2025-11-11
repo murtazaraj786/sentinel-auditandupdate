@@ -9,6 +9,87 @@ import sys
 import subprocess
 from pathlib import Path
 
+
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+REPORT_TOOL_DIR = Path(__file__).resolve().parent / "Report tool"
+
+REQUIRED_REPORT_PATTERNS = {
+    "Sentinel analytic rules": "sentinel_analytic_rules_*.csv",
+    "Sentinel data connectors": "sentinel_data_connectors_*.csv",
+    "SOC rule efficiency": "soc_rule_efficiency_*.csv",
+    "SOC data ingestion": "soc_data_ingestion_*.csv",
+    "SOC recommendations": "soc_recommendations_*.csv",
+}
+
+
+def resolve_output_dir() -> Path:
+    """Resolve and ensure the common output directory exists."""
+    env_value = os.environ.get('OUTPUT_DIR')
+
+    if env_value:
+        candidate = Path(env_value)
+        if not candidate.is_absolute():
+            candidate = (Path(__file__).resolve().parent / candidate).resolve()
+    else:
+        candidate = DEFAULT_OUTPUT_DIR
+        os.environ['OUTPUT_DIR'] = str(candidate)
+
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
+
+
+def _collect_required_reports(output_dir: Path):
+    """Return missing required patterns and the latest file for each available one."""
+    missing = []
+    for label, pattern in REQUIRED_REPORT_PATTERNS.items():
+        matches = sorted(output_dir.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not matches:
+            missing.append(label)
+    return missing
+
+
+def offer_combined_report(output_dir: Path):
+    """Prompt the user to run the combined report when prerequisites exist."""
+    missing = _collect_required_reports(output_dir)
+    if missing:
+        print("\n⚠️  Combined report cannot run yet. Missing data for:")
+        for label in missing:
+            print(f"   - {label}")
+        print("   Run the Sentinel and SOC audits to generate these files.")
+        return
+
+    try:
+        choice = input("\n📝 Generate the combined Word report now? [Y/n]: ").strip().lower()
+    except KeyboardInterrupt:
+        print("\n⚠️  Report generation skipped by user")
+        return
+
+    if choice not in {"", "y", "yes"}:
+        print("   ℹ️  You can run it later via `python \"Report tool/run_combined_report.py\"`.")
+        return
+
+    if not REPORT_TOOL_DIR.exists():
+        print("❌ Report tool directory not found. Skipping report generation.")
+        return
+
+    print("\n🛠️  Generating combined report...")
+    env = os.environ.copy()
+    env['OUTPUT_DIR'] = str(output_dir)
+
+    try:
+        subprocess.run(
+            [sys.executable, "run_combined_report.py"],
+            cwd=str(REPORT_TOOL_DIR),
+            check=True,
+            env=env,
+        )
+    except subprocess.CalledProcessError as error:
+        print(f"❌ Report generation failed (exit code {error.returncode}).")
+    except FileNotFoundError:
+        print("❌ Unable to locate run_combined_report.py.")
+    else:
+        print("✅ Combined report generation complete.")
+
 def set_auth_mode():
     """Interactive function to set authentication mode."""
     print("🔐 Azure Authentication Setup")
@@ -104,6 +185,10 @@ def main():
     print("🛡️  Sentinel Audit Tools - Authentication Helper")
     print("=" * 60)
     
+    # Determine output directory for generated reports
+    output_dir = resolve_output_dir()
+    print(f"📁 Output directory: {output_dir}")
+
     # Get current directory
     current_dir = Path.cwd()
     
@@ -145,6 +230,8 @@ def main():
     print("2. Run individual scripts")
     print("3. Exit (just set authentication mode)")
     
+    any_success = False
+
     while True:
         try:
             run_choice = input("\nEnter choice (1-3): ").strip()
@@ -155,6 +242,7 @@ def main():
                 for name, path in available_scripts.items():
                     if run_script_with_auth(str(path), name):
                         success_count += 1
+                        any_success = True
                 
                 print(f"\n📊 Summary: {success_count}/{len(available_scripts)} scripts completed successfully")
                 break
@@ -175,7 +263,8 @@ def main():
                         script_idx = int(script_choice) - 1
                         if 0 <= script_idx < len(script_list):
                             name, path = script_list[script_idx]
-                            run_script_with_auth(str(path), name)
+                            if run_script_with_auth(str(path), name):
+                                any_success = True
                         else:
                             print(f"❌ Invalid choice. Please enter 1-{len(script_list)} or 'q'")
                     
@@ -197,6 +286,9 @@ def main():
             print("\n👋 Exiting...")
             break
     
+    if any_success:
+        offer_combined_report(output_dir)
+
     print("\n✨ Done! Your authentication preference has been set.")
     if auth_mode != 'prompt':
         print(f"🔐 Authentication mode: {auth_mode.upper()}")

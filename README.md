@@ -1,6 +1,6 @@
-# 🛡️ Microsoft Security Audit Suite
+# 🛡️ Microsoft Security Audit Suite - Extended Edition
 
-A comprehensive collection of automated security audit tools for Microsoft security platforms. This suite provides deep visibility into your security posture across Sentinel, Defender XDR, and SOC operations.
+A comprehensive collection of automated security audit tools for Microsoft security platforms. This suite provides deep visibility into your security posture across Sentinel, Defender XDR, Defender for Cloud, Azure WAF, and SOC operations.
 
 ## 🔧 Audit Tools
 
@@ -9,6 +9,8 @@ A comprehensive collection of automated security audit tools for Microsoft secur
 | **🎯 Sentinel Audit** | Data connectors & analytic rules | 2 CSV files | Azure CLI / Service Principal |
 | **📊 SOC Optimization** | Rule efficiency & cost analysis | 3 CSV files | Azure CLI / Service Principal |
 | **🛡️ Defender XDR Audit** | M365 security posture & incidents | 4 CSV files | Microsoft Graph API |
+| **🔐 Defender for Cloud Audit** | Security assessments & compliance | 4 CSV files | Azure CLI / Service Principal |
+| **🔥 Azure WAF Audit** | Web application firewall policies | 4 CSV files | Azure CLI / Service Principal |
 
 ## 🚀 Quick Start
 
@@ -52,6 +54,18 @@ git clone https://github.com/murtazaraj786/sentinel-auditandupdate.git
 cd sentinel-auditandupdate
 python setup_all.py
 ```
+
+### Option 4: Extended Audit Suite
+```bash
+# Run the new extended audit launcher
+python run_extended_audits.py
+```
+
+### Option 5: Individual Audits
+```bash
+   # Sentinel Basic Audit
+   cd "Sentinel Audit"
+   pip install -r simple_requirements.txt
    python sentinel_audit.py
    
    # SOC Optimization
@@ -63,7 +77,17 @@ python setup_all.py
    cd "../Defender XDR Audit"
    pip install -r xdr_requirements.txt
    python defender_xdr_audit.py
-   ```
+   
+   # NEW: Defender for Cloud Audit
+   cd "../Defender for Cloud Audit"
+   pip install -r defender_cloud_requirements.txt
+   python defender_cloud_audit.py
+   
+   # NEW: Azure WAF Audit
+   cd "../Azure WAF Audit"
+   pip install -r waf_requirements.txt
+   python azure_waf_audit.py
+```
 
 ## 🔐 Authentication Options
 

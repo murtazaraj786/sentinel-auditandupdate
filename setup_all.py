@@ -9,6 +9,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+ENV_VARIABLES = [
+    ("AZURE_TENANT_ID", "Azure AD tenant ID (GUID)", True),
+    ("AZURE_SUBSCRIPTION_ID", "Subscription ID containing Microsoft Sentinel", True),
+    ("RESOURCE_GROUP_NAME", "Resource group name for the Sentinel workspace", True),
+    ("WORKSPACE_NAME", "Log Analytics workspace name (Sentinel)", True),
+    ("AUTH_MODE", "Authentication preference (device/browser/cli/auto)", False),
+    ("AZURE_CLIENT_ID", "Optional Azure app (client) ID for Microsoft Graph", False),
+]
+
 def run_command(command, cwd=None):
     """Run a command and return success status."""
     try:
@@ -115,6 +124,82 @@ def test_installations():
     
     return all_good
 
+
+def _prompt_for_value(key: str, description: str, required: bool) -> str:
+    """Prompt for an environment variable with optional default."""
+    existing = os.environ.get(key, "").strip()
+    while True:
+        prompt = f"   {key} ({description})"
+        if existing:
+            prompt += f" [{existing}]"
+        prompt += ": "
+        try:
+            value = input(prompt).strip()
+        except KeyboardInterrupt:
+            print("\n   ❌ Input cancelled by user")
+            sys.exit(1)
+
+        if not value:
+            value = existing
+
+        if required and not value:
+            print("   ⚠️  This value is required. Please provide a value.")
+            continue
+
+        return value
+
+
+def write_env_file(env_values):
+    """Persist environment variables to a .env file."""
+    env_path = Path(".env")
+    if env_path.exists():
+        choice = input(".env already exists. Overwrite? [y/N]: ").strip().lower()
+        if choice not in {"y", "yes"}:
+            print("   ⚠️  Skipped writing .env file.")
+            return
+
+    lines = [
+        "# Environment configuration for Microsoft Security Audit Suite",
+        "# Update these values as needed. Blank entries remain commented.",
+    ]
+
+    for key, _, _ in ENV_VARIABLES:
+        value = env_values.get(key, "").strip()
+        if value:
+            lines.append(f"{key}={value}")
+        else:
+            lines.append(f"#{key}=")
+
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"   ✅ Saved environment values to {env_path} (git-ignored)")
+
+
+def collect_environment_variables():
+    """Interactively collect and optionally persist environment variables."""
+    print("🧾 Environment configuration wizard")
+    print("   Provide values for the Azure settings used by the audit tools.")
+
+    env_values = {}
+    for key, description, required in ENV_VARIABLES:
+        env_values[key] = _prompt_for_value(key, description, required)
+
+    for key, value in env_values.items():
+        if value:
+            os.environ[key] = value
+
+    print("\n   Summary of provided values:")
+    for key, value in env_values.items():
+        display_value = value if value else "(blank)"
+        print(f"   - {key}: {display_value}")
+
+    save_choice = input("\nSave these values to a .env file for reuse? [Y/n]: ").strip().lower()
+    if save_choice in {"", "y", "yes"}:
+        write_env_file(env_values)
+    else:
+        print("   ⚠️  Values not written to disk. Remember to set them before running audits.")
+
+    print("\n   📌 Tip: load the .env file in PowerShell with `Get-Content .env | foreach{ if ($_ -notmatch '^#') { $name,$value = $_.Split('='); if($value){ Set-Item Env:$name $value } } }`")
+
 def main():
     """Main setup function."""
     print("🚀 Microsoft Security Audit Suite Setup")
@@ -151,7 +236,21 @@ def main():
         print("   ✅ All packages installed correctly")
     else:
         print("   ⚠️  Some packages may have installation issues")
-    
+
+    print("")
+
+    try:
+        run_env_wizard = input("Would you like to fill out the environment configuration now? [Y/n]: ").strip().lower()
+    except KeyboardInterrupt:
+        print("\n⚠️  Environment configuration skipped by user")
+        run_env_wizard = "n"
+
+    if run_env_wizard in {"", "y", "yes"}:
+        print("")
+        collect_environment_variables()
+    else:
+        print("   ⚠️  Skipped environment configuration wizard. Remember to set variables manually.")
+
     print("")
     print("=" * 50)
     
